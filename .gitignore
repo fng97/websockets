@@ -1,0 +1,12 @@
+# nix flake direnv
+.direnv
+
+# zig cache and build
+zig-out
+.zig-cache
+
+# macOS
+.DS_Store
+
+# wstest results
+autobahn-testsuite/reports
