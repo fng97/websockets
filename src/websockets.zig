@@ -214,11 +214,17 @@ pub const Client = struct {
             const fin = frame_header[0] & fin_mask != 0;
             const rsv = frame_header[0] & rsv_mask;
             if (rsv != 0) { // extensions not supported
-                self.close(.protocol_error, "Received frame with RSV set but extension not negotiated");
+                self.close(
+                    .protocol_error,
+                    "Received frame with RSV set but extension not negotiated",
+                );
                 return Error.ReservedBitsSet;
             }
             const opcode: Opcode = Opcode.fromByte(frame_header[0] & opc_mask) orelse {
-                self.close(.protocol_error, "Received frame with reserved opcode but extension not negotiated");
+                self.close(
+                    .protocol_error,
+                    "Received frame with reserved opcode but extension not negotiated",
+                );
                 return Error.ReservedOpcodeUsed;
             };
 
@@ -272,7 +278,7 @@ pub const Client = struct {
                 return Error.BufferTooSmallForPayload;
             }
 
-            // remaining bytes are the payload (messages from server are unmasked, so the key is omitted)
+            // remaining bytes are the payload (server messages are unmasked, so the key is omitted)
             const payload = buffer_tail[0..payload_len];
             try reader.readNoEof(payload);
 
@@ -285,7 +291,10 @@ pub const Client = struct {
             //     return Error.InvalidUtf8;
             // }
 
-            std.debug.print("Received {s} frame with a {d}-byte payload\n", .{ @tagName(opcode), payload.len });
+            std.debug.print(
+                "Received {s} frame with a {d}-byte payload\n",
+                .{ @tagName(opcode), payload.len },
+            );
 
             switch (opcode) {
                 .text, .binary => |o| {
@@ -301,15 +310,22 @@ pub const Client = struct {
                 },
                 .continuation => { // received fragment
                     if (fragmented_message == null) {
-                        self.close(CloseCode.protocol_error, "Received continuation frame without initial fragment");
+                        self.close(
+                            CloseCode.protocol_error,
+                            "Received continuation frame without initial fragment",
+                        );
                         return Error.ContinuationBeforeInitialFragment;
                     }
-                    fragmented_message.?.data = buffer[0 .. fragmented_message.?.data.len + payload.len]; // extend slice
+                    fragmented_message.?.data =
+                        buffer[0 .. fragmented_message.?.data.len + payload.len]; // extend slice
                     if (fin) return fragmented_message.?;
                 },
                 .close => {
                     if (payload.len == 1) {
-                        self.close(CloseCode.protocol_error, "Received close frame with a one byte payload");
+                        self.close(
+                            CloseCode.protocol_error,
+                            "Received close frame with a one byte payload",
+                        );
                         return Error.InvalidCloseCode;
                     }
 
@@ -321,7 +337,10 @@ pub const Client = struct {
                             close_reason,
                         });
                     } else {
-                        self.close(CloseCode.protocol_error, "Received close frame with invalid close code");
+                        self.close(
+                            CloseCode.protocol_error,
+                            "Received close frame with invalid close code",
+                        );
                         return Error.InvalidCloseCode;
                     };
 
@@ -338,7 +357,9 @@ pub const Client = struct {
     /// This should be called before disconnecting the client for a "clean"
     /// disconnect.
     fn close(self: *const Client, close_code: CloseCode, comptime msg: []const u8) void {
-        comptime if (msg.len > 123) @compileError("Expected close reason len to be <=123 (125 - 2 for close code)");
+        comptime if (msg.len > 123) @compileError(
+            "Expected close reason len to be <=123 (125 - 2 for close code)",
+        );
 
         std.debug.print("Closing connection with code {d}{s}{s}\n", .{
             @intFromEnum(close_code),
@@ -378,8 +399,8 @@ pub const Client = struct {
         header[0] = fin_mask | @intFromEnum(opcode);
 
         // second byte: mask (true) | payload length
-        header[1] = msk_mask; // first set mask bit (client frames always masked) then or with payload length
-        switch (payload.len) {
+        header[1] = msk_mask; // first set mask bit (client frames always masked)
+        switch (payload.len) { // then OR with payload length
             0...125 => {
                 header[1] |= @as(u8, @intCast(payload.len));
             },
@@ -409,7 +430,10 @@ pub const Client = struct {
         std.mem.copyForwards(u8, header[header_len..], &mask_key);
         header_len += mask_key.len;
 
-        std.debug.print("Writing {s} frame with a {d}-byte payload\n", .{ @tagName(opcode), payload.len });
+        std.debug.print(
+            "Writing {s} frame with a {d}-byte payload\n",
+            .{ @tagName(opcode), payload.len },
+        );
 
         writer.writeAll(header[0..header_len]) catch @panic("Failed to write header");
 
@@ -457,9 +481,11 @@ test "autobahn" {
             "--spec=/mount/fuzzingserver.json",
         };
 
-        const result = std.process.Child.run(.{ .allocator = allocator, .argv = &argv }) catch |err| {
-            std.debug.print("If you see 'expected 0, found 125' it means the container wasn't properly stopped. Stop" ++
-                " it with 'docker stop fuzzingserver' and try again\n", .{});
+        const result = std.process.Child.run(
+            .{ .allocator = allocator, .argv = &argv },
+        ) catch |err| {
+            std.debug.print("If you see 'expected 0, found 125' it means the container wasn't " ++
+                "properly stopped. Stop it with 'docker stop fuzzingserver' and try again\n", .{});
             return err;
         };
         defer allocator.free(result.stderr);
@@ -495,6 +521,7 @@ test "autobahn" {
 
     // CHECK TEST CASE COUNT, RUN ALL TESTS, AND GENERATE REPORT
 
+    const agent = "AwesomeWebSocketClient";
     const buffer = try allocator.alloc(u8, 16 * 1024 * 1024); // max wstest payload is 16M
     defer allocator.free(buffer);
 
@@ -515,7 +542,9 @@ test "autobahn" {
 
     defer {
         std.debug.print("\nGENERATING RESULTS REPORT\n\n", .{});
-        const client = Client.Connect("/updateReports?agent=Adventus") catch @panic("Failed to connect client");
+        const client = Client.Connect(
+            "/updateReports?agent=" ++ agent,
+        ) catch @panic("Failed to connect client");
         defer client.deinit();
         while (client.read(buffer)) |_| {} else |_| {}
     }
@@ -525,7 +554,7 @@ test "autobahn" {
 
         const path: []const u8 = try std.fmt.allocPrint(
             allocator,
-            "/runCase?case={d}&agent=Adventus",
+            "/runCase?case={d}&agent=" ++ agent,
             .{case},
         );
         defer allocator.free(path);
