@@ -459,7 +459,7 @@ pub const Client = struct {
     }
 };
 
-test "autobahn" {
+test "autobahn-suite-client" {
     const allocator = std.testing.allocator;
 
     // START AUTOBAHN FUZZING SERVER
@@ -521,7 +521,7 @@ test "autobahn" {
 
     // CHECK TEST CASE COUNT, RUN ALL TESTS, AND GENERATE REPORT
 
-    const agent = "AwesomeWebSocketClient";
+    const agent = "zws";
     const buffer = try allocator.alloc(u8, 16 * 1024 * 1024); // max wstest payload is 16M
     defer allocator.free(buffer);
 
@@ -581,4 +581,46 @@ test "autobahn" {
     // result_file.close();
     //
     // try std.testing.expect(std.mem.eql(u8, expected, result)); // fails because timings change every run
+}
+
+// Run the test suite manually for now. Start the server:
+//
+// $ zig test --test-filter server src/websockets.zig
+//
+// Then, in another tab:
+//
+// $ docker run --rm --interactive --tty \
+//         --volume=./autobahn-testsuite:/mount \
+//         --name=fuzzingclient \
+//         crossbario/autobahn-testsuite \
+//         wstest --debug --mode=fuzzingclient --spec=/mount/fuzzingclient.json
+test "autobahn-suite-server" {
+    // const allocator = std.testing.allocator;
+    const host = "127.0.0.1";
+    const port = 9001;
+
+    // TODO: This starts a server, waits for a connection, then reads from the socket. Next step is
+    // to parse the WebSocket upgrade request and accept the connection with a valid 101 response
+    // (requires handling the Sec-WebSocket-Accept header). After that, we need to echo messages
+    // which requires unmasking the payload before responding.
+
+    const address = try std.net.Address.parseIp(host, port);
+    var server = try address.listen(.{ .reuse_address = true });
+
+    std.debug.print("Accepting WebSocket connections on {}\n", .{server.listen_address});
+
+    const connection = try server.accept();
+    std.debug.print("Connection received from {}\n", .{connection.address});
+    const reader = connection.stream.reader();
+
+    var buffer: [512]u8 = undefined;
+
+    while (try reader.readUntilDelimiterOrEof(&buffer, '\n')) |line| {
+        std.debug.print("{s}\n", .{line});
+        if (line.len == 2 and std.mem.eql(u8, line, "\r\n")) {
+            break;
+        }
+    }
+
+    connection.stream.close();
 }

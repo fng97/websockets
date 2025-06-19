@@ -1,0 +1,17 @@
+{
+  "options": {
+    "failByDrop": true
+  },
+  "outdir": "/mount/reports/server",
+  "servers": [
+    {
+      "agent": "zws",
+      "url": "ws://host.docker.internal:9001"
+    }
+  ],
+  "cases": [
+    "1.1.1"
+  ],
+  "exclude-cases": [],
+  "exclude-agent-cases": {}
+}
